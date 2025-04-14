@@ -26,6 +26,7 @@ export type GenerateNextStepInput = z.infer<typeof GenerateNextStepInputSchema>;
 // Define the output schema
 const GenerateNextStepOutputSchema = z.object({
   nextStorySnippet: z.string().describe('The next snippet of the story, generated based on the player\u2019s choice and the current game state.'),
+  availableChoices: z.array(z.string()).describe('A list of available choices for the player to choose from.'),
 });
 export type GenerateNextStepOutput = z.infer<typeof GenerateNextStepOutputSchema>;
 
@@ -34,9 +35,29 @@ export async function generateNextStep(input: GenerateNextStepInput): Promise<Ge
   return generateNextStepFlow(input);
 }
 
+const generateChoices = ai.defineTool({
+  name: 'generateChoices',
+  description: 'Generates a list of possible choices for the player in the game.',
+  inputSchema: z.object({
+    gameState: z.string().describe('The current state of the game.'),
+    playerChoice: z.string().describe('The player\u2019s choice.'),
+    storySnippet: z.string().optional().describe('The story snippet which resulted from the player choice'),
+  }),
+  outputSchema: z.array(z.string()).describe('A list of possible choices for the player.'),
+}, async (input) => {
+  // Mock implementation to return some choices. In reality, this could use an LLM.
+  return [
+    'Explore the jungle',
+    'Go back to the beach',
+    'Talk to Stitch',
+    'Look for Angel',
+  ];
+});
+
 // Define the prompt
 const generateNextStepPrompt = ai.definePrompt({
   name: 'generateNextStepPrompt',
+  tools: [generateChoices],
   input: {
     schema: z.object({
       gameState: z.string().describe('The current state of the game.'),
@@ -56,7 +77,7 @@ Current Game State:
 Player's Choice:
 {{playerChoice}}
 
-Write a creative and engaging next snippet of the story, taking into account the player's choice and the current game state. The story should dynamically adjust based on the player's actions, and may involve interactions with characters like Angel and Leroy.
+Write a creative and engaging next snippet of the story, taking into account the player's choice and the current game state. The story should dynamically adjust based on the player's actions, and may involve interactions with characters like Angel and Leroy. After generating the snippet, use the generateChoices tool to create a list of available choices for the player.
 `,
 });
 
@@ -70,5 +91,9 @@ const generateNextStepFlow = ai.defineFlow<
   outputSchema: GenerateNextStepOutputSchema,
 }, async input => {
   const {output} = await generateNextStepPrompt(input);
-  return output!;
+  const choices = await generateChoices({gameState: input.gameState, playerChoice: input.playerChoice, storySnippet: output?.nextStorySnippet});
+  return {
+    nextStorySnippet: output!.nextStorySnippet,
+    availableChoices: choices,
+  };
 });
