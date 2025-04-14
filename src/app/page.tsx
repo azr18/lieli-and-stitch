@@ -7,6 +7,7 @@ import {Button} from '@/components/ui/button';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Toaster} from '@/components/ui/toaster';
 import {RadioGroup, RadioGroupItem} from '@/components/ui/radio-group';
+import {Icons} from '@/components/icons';
 
 const initialGameState = `You are Lilo, and you are on an adventure with Stitch in Hawaii.
 Stitch is your alien friend, experiment 626. You two are unseperable.
@@ -19,6 +20,12 @@ export default function Home() {
   const [summary, setSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [availableChoices, setAvailableChoices] = useState<string[]>([]);
+
+  const [isSpeakingStory, setIsSpeakingStory] = useState(false);
+  const [isSpeakingSnippet, setIsSpeakingSnippet] = useState(false);
+
+  const speechSynthesis = typeof window !== 'undefined' ? window.speechSynthesis : null;
+  const SpeechSynthesisUtterance = typeof window !== 'undefined' ? window.SpeechSynthesisUtterance : null;
 
   useEffect(() => {
     async function generateInitialSummary() {
@@ -85,6 +92,55 @@ export default function Home() {
     }
   };
 
+  const speakText = (text: string, isStory: boolean) => {
+    if (!speechSynthesis || !SpeechSynthesisUtterance) {
+      console.warn('Text-to-speech is not supported in this browser.');
+      return;
+    }
+
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel(); // Stop current speech if any
+
+      //if user presses button twice it should cancel if it is already speaking.
+      if (isStory && isSpeakingStory) {
+        setIsSpeakingStory(false);
+        return;
+      }
+
+      if (!isStory && isSpeakingSnippet) {
+        setIsSpeakingSnippet(false);
+        return;
+      }
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onstart = () => {
+      if (isStory) {
+        setIsSpeakingStory(true);
+      } else {
+        setIsSpeakingSnippet(true);
+      }
+    };
+
+    utterance.onend = () => {
+      if (isStory) {
+        setIsSpeakingStory(false);
+      } else {
+        setIsSpeakingSnippet(false);
+      }
+    };
+
+    utterance.onerror = () => {
+      if (isStory) {
+        setIsSpeakingStory(false);
+      } else {
+        setIsSpeakingSnippet(false);
+      }
+    };
+
+    speechSynthesis.speak(utterance);
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-gradient-to-br from-secondary to-primary">
       <Toaster />
@@ -97,9 +153,33 @@ export default function Home() {
             {summary ? summary : 'Embark on an exciting journey with Lilo and Stitch!'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="relative">
           <p className="text-card-foreground text-sm">{story}</p>
-          {nextSnippet && <p className="text-muted-foreground mt-2">{nextSnippet}</p>}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-0 right-0"
+            onClick={() => speakText(story, true)}
+            disabled={isSpeakingStory}
+          >
+            {isSpeakingStory ? <Icons.loader className="h-4 w-4 animate-spin" /> : <Icons.volume />}
+            <span className="sr-only">Speak</span>
+          </Button>
+          {nextSnippet && (
+            <>
+              <p className="text-muted-foreground mt-2">{nextSnippet}</p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-0 right-0 mt-2"
+                onClick={() => speakText(nextSnippet, false)}
+                disabled={isSpeakingSnippet}
+              >
+                {isSpeakingSnippet ? <Icons.loader className="h-4 w-4 animate-spin" /> : <Icons.volume />}
+                <span className="sr-only">Speak</span>
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
 
