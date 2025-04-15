@@ -156,12 +156,31 @@ const questionsData = [
   },
 ];
 
+const COLORS = ["#26cc71", "#ffeb3b", "#ff5722", "#03a9f4", "#673ab7"];
+
+const random = (max: number, min = 0) => Math.random() * (max - min) + min;
+
+const defaultCount = 200;
+const confettiConfig = {
+    angle: 90,
+    spread: 45,
+    startVelocity: 45,
+    elementCount: defaultCount,
+    dragFriction: 0.1,
+    duration: 3000,
+    stagger: 0,
+    width: "10px",
+    height: "10px",
+    perspective: "500px",
+    colors: COLORS
+};
+
 export default function Home() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [answeredCorrectlyCount, setAnsweredCorrectlyCount] = useState<number>(0);
   const [choice, setChoice] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [showFireworks, setShowFireworks] = useState<boolean>(false);
+  const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [showSadFace, setShowSadFace] = useState<boolean>(false);
   const [selectedChoiceCorrect, setSelectedChoiceCorrect] = useState<boolean | null>(null);
   const [story, setStory] = useState<string>(''); // To accumulate story progression
@@ -196,11 +215,11 @@ export default function Home() {
         // Correct Answer
         setSelectedChoiceCorrect(true);
         setAnsweredCorrectlyCount((prevCount) => prevCount + 1);
-        setShowFireworks(true);
+        setShowConfetti(true);
         setShowSadFace(false);
 
         setTimeout(() => {
-          setShowFireworks(false);
+          setShowConfetti(false);
           setStory(story + '\n' + `You answered correctly: ${questions.question}`);
           // Move to next question choice
           if (answeredCorrectlyCount < 19) {
@@ -242,6 +261,66 @@ export default function Home() {
     return selected;
   };
 
+  const fireConfetti = useCallback(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1000;`;
+    document.body.appendChild(canvas);
+
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+        return;
+    }
+
+    let particles: { x: number; y: number; angle: number; velocity: number; color: string }[] = [];
+
+    const createParticle = () => {
+        const color = confettiConfig.colors[Math.floor(Math.random() * confettiConfig.colors.length)];
+        return {
+            x: random(canvas.width),
+            y: canvas.height,
+            angle: random(confettiConfig.angle - confettiConfig.spread / 2, confettiConfig.angle + confettiConfig.spread / 2),
+            velocity: random(confettiConfig.startVelocity),
+            color: color
+        };
+    };
+
+    for (let i = 0; i < confettiConfig.elementCount; i++) {
+        particles.push(createParticle());
+    }
+
+    const animationFrame = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        particles.forEach((particle, index) => {
+            particle.x += Math.cos(particle.angle * Math.PI / 180) * particle.velocity;
+            particle.y -= Math.sin(particle.angle * Math.PI / 180) * particle.velocity;
+            particle.velocity *= (1 - confettiConfig.dragFriction);
+
+            ctx.beginPath();
+            ctx.fillStyle = particle.color;
+            ctx.fillRect(particle.x, particle.y, parseFloat(confettiConfig.width), parseFloat(confettiConfig.height));
+            ctx.closePath();
+        });
+
+        requestAnimationFrame(animationFrame);
+    };
+
+    animationFrame();
+
+    setTimeout(() => {
+        document.body.removeChild(canvas);
+    }, confettiConfig.duration);
+}, []);
+
+  useEffect(() => {
+    if (showConfetti) {
+      fireConfetti();
+    }
+  }, [showConfetti, fireConfetti]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-gradient-to-br from-secondary to-primary">
       <Toaster />
@@ -267,14 +346,6 @@ export default function Home() {
           )}
         </CardContent>
       </Card>
-
-      {showFireworks && (
-        <div className="fireworks">
-          <span className="firework"></span>
-          <span className="firework"></span>
-          <span className="firework"></span>
-        </div>
-      )}
 
       {showSadFace && (
         <AlertDialog>
