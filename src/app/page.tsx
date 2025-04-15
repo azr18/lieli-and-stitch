@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useCallback} from 'react';
 import {generateNextStep} from '@/ai/flows/generate-next-step';
 import {summarizeStory} from '@/ai/flows/summarize-story';
 import {Button} from '@/components/ui/button';
@@ -8,24 +8,62 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/compo
 import {Toaster} from '@/components/ui/toaster';
 import {RadioGroup, RadioGroupItem} from '@/components/ui/radio-group';
 import {Icons} from '@/components/icons';
+import {AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger} from '@/components/ui/alert-dialog';
 
 const initialGameState = `You are Lilo, and you are on an adventure with Stitch in Hawaii.
 Stitch is your alien friend, experiment 626. You two are unseperable.
 You start at your home. The day is sunny.`;
 
+const questions = [
+  {
+    storySnippet: 'You are Lilo, and you are on an adventure with Stitch in Hawaii. Stitch is your alien friend, experiment 626. You two are unseperable. You start at your home. The day is sunny.',
+    question: 'What do you do first?',
+    choices: ['Go to the beach', 'Play with Stitch at home', 'Look for pineapples', 'Take a nap'],
+    correctAnswer: 'Go to the beach',
+    nextStorySnippet: 'You and Stitch head to the beach. The waves are calling!',
+  },
+  {
+    storySnippet: 'You and Stitch head to the beach. The waves are calling!',
+    question: 'What do you want to do at the beach?',
+    choices: ['Surf', 'Build a sandcastle', 'Look for seashells', 'Bury Stitch in the sand'],
+    correctAnswer: 'Surf',
+    nextStorySnippet: 'You grab your surfboards. Time to catch some waves!',
+  },
+  {
+    storySnippet: 'You grab your surfboards. Time to catch some waves!',
+    question: 'Uh oh, the surf board is broken, what should you do?',
+    choices: ['Find another board', 'Cry', 'Go home', 'Try to use the broken board'],
+    correctAnswer: 'Find another board',
+    nextStorySnippet: 'There is a backup surf board. Now its time to surf!',
+  },
+  {
+    storySnippet: 'There is a backup surf board. Now its time to surf!',
+    question: 'Oh no, a shark appears',
+    choices: ['Run away', 'Punch it', 'Feed it', 'Wave'],
+    correctAnswer: 'Run away',
+    nextStorySnippet: 'You and Stitch ran away from the shark!',
+  },
+];
+
 export default function Home() {
   const [story, setStory] = useState<string>(initialGameState);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [choice, setChoice] = useState<string>('');
   const [nextSnippet, setNextSnippet] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [availableChoices, setAvailableChoices] = useState<string[]>([]);
+  const [correctAnswersCount, setCorrectAnswersCount] = useState<number>(0);
+  const [showFireworks, setShowFireworks] = useState<boolean>(false);
+  const [showSadFace, setShowSadFace] = useState<boolean>(false);
 
   const [isSpeakingStory, setIsSpeakingStory] = useState(false);
   const [isSpeakingSnippet, setIsSpeakingSnippet] = useState(false);
 
   const speechSynthesis = typeof window !== 'undefined' ? window.speechSynthesis : null;
-  const SpeechSynthesisUtterance = typeof window !== 'undefined' ? window.SpeechSynthesisUtterance : null;
+  const SpeechSynthesisUtterance = typeof window !== 'undefined' ? window.speechSynthesisUtterance : null;
+
+  const currentQuestion = questions[currentQuestionIndex];
 
   useEffect(() => {
     async function generateInitialSummary() {
@@ -33,31 +71,8 @@ export default function Home() {
       setSummary(initialSummary?.summary || 'No summary available.');
     }
     generateInitialSummary();
-  }, []);
-
-  useEffect(() => {
-    const getAvailableChoices = async () => {
-      setIsLoading(true);
-      try {
-        const nextStep = await generateNextStep({
-          gameState: story,
-          playerChoice: 'start', // Initial call to get the first set of choices
-        });
-
-        if (nextStep) {
-          setNextSnippet(nextStep.nextStorySnippet);
-          setAvailableChoices(nextStep.availableChoices || []); // Set available choices from the response
-        } else {
-          console.error('Failed to generate next step.');
-        }
-      } catch (error) {
-        console.error('Error generating next step:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    getAvailableChoices();
+    setAvailableChoices(currentQuestion?.choices || []);
+    setNextSnippet(currentQuestion?.storySnippet || null);
   }, []);
 
   const handleChoiceSubmit = async () => {
@@ -66,30 +81,32 @@ export default function Home() {
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const nextStep = await generateNextStep({
-        gameState: story,
-        playerChoice: choice,
-      });
+    if (choice === currentQuestion?.correctAnswer) {
+      // Correct Answer
+      setCorrectAnswersCount((prevCount) => prevCount + 1);
+      setShowFireworks(true);
+      setShowSadFace(false);
 
-      if (nextStep) {
-        setNextSnippet(nextStep.nextStorySnippet);
-        setStory(story + '\n' + 'Your Choice: ' + choice + '\n' + nextStep.nextStorySnippet);
-        setAvailableChoices(nextStep.availableChoices || []);
-        setChoice(''); // Clear the choice input after submitting
+      setTimeout(() => {
+        setShowFireworks(false);
+        setStory(story + '\n' + 'Your Choice: ' + choice + '\n' + currentQuestion.nextStorySnippet);
 
-        // Generate a new summary after each step
-        const newSummary = await summarizeStory({storySoFar: story});
-        setSummary(newSummary?.summary || 'No summary available.');
-      } else {
-        console.error('Failed to generate next step.');
-      }
-    } catch (error) {
-      console.error('Error generating next step:', error);
-    } finally {
-      setIsLoading(false);
+        if (currentQuestionIndex < questions.length - 1) {
+          setCurrentQuestionIndex((prevIndex) => prevIndex + 1);
+          setAvailableChoices(questions[currentQuestionIndex + 1].choices);
+          setNextSnippet(questions[currentQuestionIndex + 1].storySnippet);
+        } else {
+          setNextSnippet('You finished the game!');
+        }
+      }, 2000);
+    } else {
+      // Wrong Answer
+      setShowSadFace(true);
+      setTimeout(() => {
+        setShowSadFace(false);
+      }, 2000);
     }
+    setChoice('');
   };
 
   const speakText = (text: string, isStory: boolean) => {
@@ -154,34 +171,60 @@ export default function Home() {
           </CardDescription>
         </CardHeader>
         <CardContent className="relative">
-          <p className="text-card-foreground text-sm">{story}</p>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-0 right-0"
-            onClick={() => speakText(story, true)}
-            disabled={isSpeakingStory}
-          >
-            {isSpeakingStory ? <Icons.loader className="h-4 w-4 animate-spin" /> : <Icons.volume />}
-            <span className="sr-only">Speak</span>
-          </Button>
+          <div className="border p-4 rounded">
+            <p className="text-card-foreground text-sm">{story}</p>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-0 right-0"
+              onClick={() => speakText(story, true)}
+              disabled={isSpeakingStory}
+            >
+              {isSpeakingStory ? <Icons.loader className="h-4 w-4 animate-spin" /> : <Icons.volume />}
+              <span className="sr-only">Speak</span>
+            </Button>
+          </div>
           {nextSnippet && (
             <>
-              <p className="text-muted-foreground mt-2">{nextSnippet}</p>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-0 right-0 mt-2"
-                onClick={() => speakText(nextSnippet, false)}
-                disabled={isSpeakingSnippet}
-              >
-                {isSpeakingSnippet ? <Icons.loader className="h-4 w-4 animate-spin" /> : <Icons.volume />}
-                <span className="sr-only">Speak</span>
-              </Button>
+              <div className="border p-4 rounded mt-4">
+                <p className="text-muted-foreground">{currentQuestion?.question}</p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-0 right-0 mt-2"
+                  onClick={() => speakText(nextSnippet, false)}
+                  disabled={isSpeakingSnippet}
+                >
+                  {isSpeakingSnippet ? <Icons.loader className="h-4 w-4 animate-spin" /> : <Icons.volume />}
+                  <span className="sr-only">Speak</span>
+                </Button>
+              </div>
             </>
           )}
         </CardContent>
       </Card>
+
+      {showFireworks && (
+        <div className="fireworks">
+          <span className="firework"></span>
+          <span className="firework"></span>
+          <span className="firework"></span>
+        </div>
+      )}
+
+      {showSadFace && (
+        <AlertDialog>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Incorrect Answer</AlertDialogTitle>
+              <AlertDialogDescription>
+                <Icons.close className="h-6 w-6 inline-block mr-2 text-red-500" />
+                Try again!
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       <div className="w-full max-w-2xl mt-6">
         <RadioGroup
