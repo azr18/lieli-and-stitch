@@ -221,7 +221,7 @@ export default function Home() {
         setShowSadFace(false);
 
         if (isFirstTry) {
-          setPoints((prevPoints) => prevPoints + 10);
+          setPoints((prevPoints) => prevPoints + 1);
         }
 
         setTimeout(() => {
@@ -429,3 +429,4 @@ export default function Home() {
     </div>
   );
 }
+
