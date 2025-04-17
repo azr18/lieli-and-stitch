@@ -186,6 +186,8 @@ export default function Home() {
   const [story, setStory] = useState<string>(''); // To accumulate story progression
   const [availableNextQuestions, setAvailableNextQuestions] = useState<number[]>([]);
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
+  const [points, setPoints] = useState<number>(0);
+  const [isFirstTry, setIsFirstTry] = useState<boolean>(true);
 
   const questions = questionsData[currentQuestionIndex];
 
@@ -218,6 +220,10 @@ export default function Home() {
         setShowConfetti(true);
         setShowSadFace(false);
 
+        if (isFirstTry) {
+          setPoints((prevPoints) => prevPoints + 10);
+        }
+
         setTimeout(() => {
           setShowConfetti(false);
           setStory(story + '\n' + `You answered correctly: ${questions.question}`);
@@ -247,6 +253,7 @@ export default function Home() {
       setAvailableNextQuestions([]);
       setSelectedChoiceCorrect(null);
       setChoice('');
+      setIsFirstTry(true);
     }
   };
 
@@ -334,6 +341,9 @@ export default function Home() {
           </CardDescription>
         </CardHeader>
         <CardContent className="relative">
+           <div className="flex justify-between items-center mb-4">
+            <div className="font-bold text-lg">Points: {points}</div>
+          </div>
           <div className="border p-4 rounded">
             <p className="text-card-foreground text-sm">{story}</p>
           </div>
@@ -367,7 +377,10 @@ export default function Home() {
             <RadioGroup
               defaultValue={choice}
               className="grid gap-2"
-              onValueChange={setChoice}
+              onValueChange={(value) => {
+                setChoice(value);
+                setIsFirstTry(choice === '' || value !== questions?.correctAnswer);
+              }}
             >
               {questions?.choices.map((option) => (
                 <div key={option} className="flex items-center space-x-2">
@@ -416,5 +429,3 @@ export default function Home() {
     </div>
   );
 }
-
-
